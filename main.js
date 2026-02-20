@@ -2,8 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const obsidian_1 = require("obsidian");
 class CryptoPlugin extends obsidian_1.Plugin {
+    lastPasswordUsed = null;
     async onload() {
-        // 1. Crear el icono en la barra lateral (Ribbon) con detección inteligente
+        // 1. Icono inteligente en la barra lateral
         const ribbonIconEl = this.addRibbonIcon('lock', 'Crypto Pro: Auto-Acción', async () => {
             const view = this.app.workspace.getActiveViewOfType(obsidian_1.MarkdownView);
             if (!view) {
@@ -16,16 +17,15 @@ class CryptoPlugin extends obsidian_1.Plugin {
                 new obsidian_1.Notice('⚠️ Selecciona el texto para cifrar o descifrar');
                 return;
             }
-            // Lógica de detección: ¿Es un bloque cifrado?
             const isEncrypted = selection.startsWith('%%ENC:') && selection.endsWith('%%');
             if (isEncrypted) {
-                // ACCIÓN: DESCIFRAR
                 const data = selection.substring(6, selection.length - 2);
                 new PasswordModal(this.app, "Descifrar", async (pass) => {
                     try {
                         const decrypted = await this.decrypt(data, pass);
                         editor.replaceSelection(decrypted);
-                        new obsidian_1.Notice('🔓 Texto descifrado correctamente');
+                        this.lastPasswordUsed = pass;
+                        new obsidian_1.Notice('🔓 Texto descifrado');
                     }
                     catch (e) {
                         new obsidian_1.Notice('❌ Contraseña incorrecta');
@@ -33,30 +33,29 @@ class CryptoPlugin extends obsidian_1.Plugin {
                 }).open();
             }
             else {
-                // ACCIÓN: CIFRAR
                 new PasswordModal(this.app, "Cifrar", async (pass) => {
                     const encrypted = await this.encrypt(selection, pass);
                     editor.replaceSelection(`%%ENC:${encrypted}%%`);
-                    new obsidian_1.Notice('🔒 Texto cifrado correctamente');
+                    this.lastPasswordUsed = pass;
+                    new obsidian_1.Notice('🔒 Texto cifrado');
                 }).open();
             }
         });
-        // Aplicar clase CSS al icono
-        ribbonIconEl.addClass('my-crypto-ribbon-class');
-        // 2. Comandos para la paleta (Ctrl+P)
+        // 2. Auto-lock al cambiar de nota
+        this.registerEvent(this.app.workspace.on('active-leaf-change', () => {
+            this.lastPasswordUsed = null;
+        }));
+        // 3. Comando para la paleta
         this.addCommand({
             id: 'crypto-auto-action',
             name: 'Ejecutar Cifrado/Descifrado inteligente',
             callback: () => {
                 const view = this.app.workspace.getActiveViewOfType(obsidian_1.MarkdownView);
-                if (view) {
-                    // Reutilizamos la lógica del Ribbon
+                if (view)
                     ribbonIconEl.click();
-                }
             }
         });
     }
-    // --- Lógica Criptográfica ---
     async encrypt(text, password) {
         const encoder = new TextEncoder();
         const salt = window.crypto.getRandomValues(new Uint8Array(16));
@@ -78,19 +77,19 @@ class CryptoPlugin extends obsidian_1.Plugin {
         const decrypted = await window.crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted);
         return new TextDecoder().decode(decrypted);
     }
+    // --- CORRECCIÓN DE ERROR TS2322 ---
     async deriveKey(password, salt) {
         const encoder = new TextEncoder();
         const baseKey = await window.crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveKey"]);
         return window.crypto.subtle.deriveKey({
             name: "PBKDF2",
-            salt: salt,
+            salt: salt.buffer, // USAR .buffer PARA SOLUCIONAR EL ERROR
             iterations: 100000,
             hash: "SHA-256"
         }, baseKey, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
     }
 }
 exports.default = CryptoPlugin;
-// --- Clase del Modal ---
 class PasswordModal extends obsidian_1.Modal {
     action;
     onSubmit;
@@ -104,41 +103,34 @@ class PasswordModal extends obsidian_1.Modal {
         contentEl.createEl("h2", { text: `${this.action} contenido` });
         let pass = "";
         let confirmPass = "";
-        new obsidian_1.Setting(contentEl)
-            .setName("Contraseña")
-            .addText(text => {
-            text.inputEl.type = "password";
-            text.setPlaceholder("Introduce tu clave...")
-                .onChange(value => pass = value);
-        });
-        if (this.action === "Cifrar") {
-            new obsidian_1.Setting(contentEl)
-                .setName("Confirmar contraseña")
-                .addText(text => {
-                text.inputEl.type = "password";
-                text.setPlaceholder("Repite tu clave...")
-                    .onChange(value => confirmPass = value);
-            });
-        }
-        new obsidian_1.Setting(contentEl)
-            .addButton(btn => btn
-            .setButtonText(this.action)
-            .setCta()
-            .onClick(() => {
+        const handleAction = () => {
             if (this.action === "Cifrar" && pass !== confirmPass) {
                 new obsidian_1.Notice("❌ Las contraseñas no coinciden.");
                 return;
             }
             if (pass.length === 0) {
-                new obsidian_1.Notice("⚠️ La contraseña no puede estar vacía.");
+                new obsidian_1.Notice("⚠️ Vacía.");
                 return;
             }
             this.close();
             this.onSubmit(pass);
-        }));
+        };
+        new obsidian_1.Setting(contentEl).setName("Contraseña").addText(text => {
+            text.inputEl.type = "password";
+            text.setPlaceholder("Introduce tu clave...").onChange(value => pass = value);
+            text.inputEl.addEventListener('keypress', (e) => { if (e.key === 'Enter' && this.action === "Descifrar")
+                handleAction(); });
+            setTimeout(() => text.inputEl.focus(), 50); // Auto-focus
+        });
+        if (this.action === "Cifrar") {
+            new obsidian_1.Setting(contentEl).setName("Confirmar contraseña").addText(text => {
+                text.inputEl.type = "password";
+                text.setPlaceholder("Repite tu clave...").onChange(value => confirmPass = value);
+                text.inputEl.addEventListener('keypress', (e) => { if (e.key === 'Enter')
+                    handleAction(); });
+            });
+        }
+        new obsidian_1.Setting(contentEl).addButton(btn => btn.setButtonText(this.action).setCta().onClick(() => handleAction()));
     }
-    onClose() {
-        let { contentEl } = this;
-        contentEl.empty();
-    }
+    onClose() { this.contentEl.empty(); }
 }
