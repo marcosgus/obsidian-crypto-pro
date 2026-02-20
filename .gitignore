@@ -10,4 +10,4 @@ yarn-error.log*
 # Archivos de sistema
 .DS_Store
 Thumbs.db
-build.bat
+build.bat 
