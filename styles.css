@@ -1,0 +1,11 @@
+/* Estilo para los bloques de texto cifrado */
+.cm-s-obsidian .cm-comment {
+    color: #888; /* Gris tenue */
+    font-family: 'Courier New', Courier, monospace; /* Estilo código */
+}
+
+/* Opcional: Resaltar cuando el texto cifrado está seleccionado */
+span:contains("%%ENC:") {
+    background-color: rgba(255, 215, 0, 0.1); 
+    border-radius: 4px;
+}
