@@ -1,7 +1,7 @@
 {
   "id": "obsidian-crypto-pro",
   "name": "Crypto Pro: Secure AES-GCM Encryption",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "minAppVersion": "1.0.0",
   "description": "Encrypt and decrypt note selections using industry-standard AES-GCM (256-bit). Features secure password masking and double-verification to prevent data loss.",
   "author": "Gustavo Marcos",

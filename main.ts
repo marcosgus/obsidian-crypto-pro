@@ -1,40 +1,65 @@
 import { App, Editor, MarkdownView, Modal, Plugin, Setting, Notice } from 'obsidian';
 
 export default class CryptoPlugin extends Plugin {
+    
     async onload() {
-        // Comando para Cifrar
-        this.addCommand({
-            id: 'encrypt-selection',
-            name: 'Cifrar texto seleccionado',
-            editorCallback: async (editor: Editor) => {
-                const selection = editor.getSelection();
-                if (!selection) return;
-                
-                new PasswordModal(this.app, "Cifrar", async (pass) => {
-                    const encrypted = await this.encrypt(selection, pass);
-                    editor.replaceSelection(`%%ENC:${encrypted}%%`);
-                }).open();
+        // 1. Crear el icono en la barra lateral (Ribbon) con detección inteligente
+        const ribbonIconEl = this.addRibbonIcon('lock', 'Crypto Pro: Auto-Acción', async () => {
+            const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+            
+            if (!view) {
+                new Notice('❌ Abre una nota primero');
+                return;
             }
-        });
 
-        // Comando para Descifrar
-        this.addCommand({
-            id: 'decrypt-selection',
-            name: 'Descifrar texto seleccionado',
-            editorCallback: async (editor: Editor) => {
-                const selection = editor.getSelection();
-                // Extraer el contenido del bloque %%ENC:...%%
-                const match = selection.match(/%%ENC:(.*)%%/);
-                const data = match ? match[1] : selection;
+            const editor = view.editor;
+            const selection = editor.getSelection();
 
+            if (!selection) {
+                new Notice('⚠️ Selecciona el texto para cifrar o descifrar');
+                return;
+            }
+
+            // Lógica de detección: ¿Es un bloque cifrado?
+            const isEncrypted = selection.startsWith('%%ENC:') && selection.endsWith('%%');
+
+            if (isEncrypted) {
+                // ACCIÓN: DESCIFRAR
+                const data = selection.substring(6, selection.length - 2);
+                
                 new PasswordModal(this.app, "Descifrar", async (pass) => {
                     try {
                         const decrypted = await this.decrypt(data, pass);
                         editor.replaceSelection(decrypted);
+                        new Notice('🔓 Texto descifrado correctamente');
                     } catch (e) {
-                        console.error("Error al descifrar: Contraseña incorrecta o datos corruptos.");
+                        new Notice('❌ Contraseña incorrecta');
                     }
                 }).open();
+
+            } else {
+                // ACCIÓN: CIFRAR
+                new PasswordModal(this.app, "Cifrar", async (pass) => {
+                    const encrypted = await this.encrypt(selection, pass);
+                    editor.replaceSelection(`%%ENC:${encrypted}%%`);
+                    new Notice('🔒 Texto cifrado correctamente');
+                }).open();
+            }
+        });
+
+        // Aplicar clase CSS al icono
+        ribbonIconEl.addClass('my-crypto-ribbon-class');
+
+        // 2. Comandos para la paleta (Ctrl+P)
+        this.addCommand({
+            id: 'crypto-auto-action',
+            name: 'Ejecutar Cifrado/Descifrado inteligente',
+            callback: () => {
+                const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+                if (view) {
+                    // Reutilizamos la lógica del Ribbon
+                    (ribbonIconEl as any).click();
+                }
             }
         });
     }
@@ -51,7 +76,6 @@ export default class CryptoPlugin extends Plugin {
             { name: "AES-GCM", iv }, key, encoder.encode(text)
         );
 
-        // Concatenamos Salt + IV + Texto Cifrado para que sea auto-contenido
         const result = new Uint8Array(salt.length + iv.length + encrypted.byteLength);
         result.set(salt, 0);
         result.set(iv, salt.length);
@@ -74,25 +98,25 @@ export default class CryptoPlugin extends Plugin {
         return new TextDecoder().decode(decrypted);
     }
 
-// Cambia esta línea en la función deriveKey
-async deriveKey(password: string, salt: Uint8Array) {
-    const encoder = new TextEncoder();
-    const baseKey = await window.crypto.subtle.importKey(
-        "raw", encoder.encode(password), "PBKDF2", false, ["deriveKey"]
-    );
-    return window.crypto.subtle.deriveKey(
-        { 
-            name: "PBKDF2", 
-            salt: salt as unknown as ArrayBuffer,
-            iterations: 100000, 
-            hash: "SHA-256" 
-        },
-        baseKey, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
-    );
-}
+    async deriveKey(password: string, salt: Uint8Array) {
+        const encoder = new TextEncoder();
+        const baseKey = await window.crypto.subtle.importKey(
+            "raw", encoder.encode(password), "PBKDF2", false, ["deriveKey"]
+        );
+        return window.crypto.subtle.deriveKey(
+            { 
+                name: "PBKDF2", 
+                salt: salt as unknown as ArrayBuffer,
+                iterations: 100000, 
+                hash: "SHA-256" 
+            },
+            baseKey, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
+        );
+    }
 }
 
-// Modal simple para pedir la contraseña
+// --- Clase del Modal ---
+
 class PasswordModal extends Modal {
     constructor(
         app: App, 
@@ -109,27 +133,24 @@ class PasswordModal extends Modal {
         let pass = "";
         let confirmPass = "";
 
-        // Campo de Contraseña
         new Setting(contentEl)
             .setName("Contraseña")
             .addText(text => {
-                text.inputEl.type = "password"; // OCULTA los caracteres
+                text.inputEl.type = "password";
                 text.setPlaceholder("Introduce tu clave...")
                     .onChange(value => pass = value);
             });
 
-        // Solo añadir "Confirmar" si estamos cifrando
         if (this.action === "Cifrar") {
             new Setting(contentEl)
                 .setName("Confirmar contraseña")
                 .addText(text => {
-                    text.inputEl.type = "password"; // OCULTA los caracteres
+                    text.inputEl.type = "password";
                     text.setPlaceholder("Repite tu clave...")
                         .onChange(value => confirmPass = value);
                 });
         }
 
-        // Botón de Acción
         new Setting(contentEl)
             .addButton(btn => btn
                 .setButtonText(this.action)

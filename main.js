@@ -3,38 +3,56 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const obsidian_1 = require("obsidian");
 class CryptoPlugin extends obsidian_1.Plugin {
     async onload() {
-        // Comando para Cifrar
-        this.addCommand({
-            id: 'encrypt-selection',
-            name: 'Cifrar texto seleccionado',
-            editorCallback: async (editor) => {
-                const selection = editor.getSelection();
-                if (!selection)
-                    return;
-                new PasswordModal(this.app, "Cifrar", async (pass) => {
-                    const encrypted = await this.encrypt(selection, pass);
-                    editor.replaceSelection(`%%ENC:${encrypted}%%`);
-                }).open();
+        // 1. Crear el icono en la barra lateral (Ribbon) con detección inteligente
+        const ribbonIconEl = this.addRibbonIcon('lock', 'Crypto Pro: Auto-Acción', async () => {
+            const view = this.app.workspace.getActiveViewOfType(obsidian_1.MarkdownView);
+            if (!view) {
+                new obsidian_1.Notice('❌ Abre una nota primero');
+                return;
             }
-        });
-        // Comando para Descifrar
-        this.addCommand({
-            id: 'decrypt-selection',
-            name: 'Descifrar texto seleccionado',
-            editorCallback: async (editor) => {
-                const selection = editor.getSelection();
-                // Extraer el contenido del bloque %%ENC:...%%
-                const match = selection.match(/%%ENC:(.*)%%/);
-                const data = match ? match[1] : selection;
+            const editor = view.editor;
+            const selection = editor.getSelection();
+            if (!selection) {
+                new obsidian_1.Notice('⚠️ Selecciona el texto para cifrar o descifrar');
+                return;
+            }
+            // Lógica de detección: ¿Es un bloque cifrado?
+            const isEncrypted = selection.startsWith('%%ENC:') && selection.endsWith('%%');
+            if (isEncrypted) {
+                // ACCIÓN: DESCIFRAR
+                const data = selection.substring(6, selection.length - 2);
                 new PasswordModal(this.app, "Descifrar", async (pass) => {
                     try {
                         const decrypted = await this.decrypt(data, pass);
                         editor.replaceSelection(decrypted);
+                        new obsidian_1.Notice('🔓 Texto descifrado correctamente');
                     }
                     catch (e) {
-                        console.error("Error al descifrar: Contraseña incorrecta o datos corruptos.");
+                        new obsidian_1.Notice('❌ Contraseña incorrecta');
                     }
                 }).open();
+            }
+            else {
+                // ACCIÓN: CIFRAR
+                new PasswordModal(this.app, "Cifrar", async (pass) => {
+                    const encrypted = await this.encrypt(selection, pass);
+                    editor.replaceSelection(`%%ENC:${encrypted}%%`);
+                    new obsidian_1.Notice('🔒 Texto cifrado correctamente');
+                }).open();
+            }
+        });
+        // Aplicar clase CSS al icono
+        ribbonIconEl.addClass('my-crypto-ribbon-class');
+        // 2. Comandos para la paleta (Ctrl+P)
+        this.addCommand({
+            id: 'crypto-auto-action',
+            name: 'Ejecutar Cifrado/Descifrado inteligente',
+            callback: () => {
+                const view = this.app.workspace.getActiveViewOfType(obsidian_1.MarkdownView);
+                if (view) {
+                    // Reutilizamos la lógica del Ribbon
+                    ribbonIconEl.click();
+                }
             }
         });
     }
@@ -45,7 +63,6 @@ class CryptoPlugin extends obsidian_1.Plugin {
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
         const key = await this.deriveKey(password, salt);
         const encrypted = await window.crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoder.encode(text));
-        // Concatenamos Salt + IV + Texto Cifrado para que sea auto-contenido
         const result = new Uint8Array(salt.length + iv.length + encrypted.byteLength);
         result.set(salt, 0);
         result.set(iv, salt.length);
@@ -61,7 +78,6 @@ class CryptoPlugin extends obsidian_1.Plugin {
         const decrypted = await window.crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted);
         return new TextDecoder().decode(decrypted);
     }
-    // Cambia esta línea en la función deriveKey
     async deriveKey(password, salt) {
         const encoder = new TextEncoder();
         const baseKey = await window.crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveKey"]);
@@ -74,7 +90,7 @@ class CryptoPlugin extends obsidian_1.Plugin {
     }
 }
 exports.default = CryptoPlugin;
-// Modal simple para pedir la contraseña
+// --- Clase del Modal ---
 class PasswordModal extends obsidian_1.Modal {
     action;
     onSubmit;
@@ -88,25 +104,22 @@ class PasswordModal extends obsidian_1.Modal {
         contentEl.createEl("h2", { text: `${this.action} contenido` });
         let pass = "";
         let confirmPass = "";
-        // Campo de Contraseña
         new obsidian_1.Setting(contentEl)
             .setName("Contraseña")
             .addText(text => {
-            text.inputEl.type = "password"; // OCULTA los caracteres
+            text.inputEl.type = "password";
             text.setPlaceholder("Introduce tu clave...")
                 .onChange(value => pass = value);
         });
-        // Solo añadir "Confirmar" si estamos cifrando
         if (this.action === "Cifrar") {
             new obsidian_1.Setting(contentEl)
                 .setName("Confirmar contraseña")
                 .addText(text => {
-                text.inputEl.type = "password"; // OCULTA los caracteres
+                text.inputEl.type = "password";
                 text.setPlaceholder("Repite tu clave...")
                     .onChange(value => confirmPass = value);
             });
         }
-        // Botón de Acción
         new obsidian_1.Setting(contentEl)
             .addButton(btn => btn
             .setButtonText(this.action)
