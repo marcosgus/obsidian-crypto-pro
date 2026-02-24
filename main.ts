@@ -128,6 +128,16 @@ class PasswordModal extends Modal {
         }
 
         new Setting(contentEl).addButton(btn => btn.setButtonText(this.action).setCta().onClick(() => handleAction()));
+
+        // --- LEYENDA "BY GUS" ---
+        const footer = contentEl.createEl("div", { 
+            text: "by Gus", 
+            cls: "crypto-pro-footer" 
+        });
+        footer.style.fontSize = "10px";
+        footer.style.textAlign = "right";
+        footer.style.marginTop = "20px";
+        footer.style.opacity = "0.5";
     }
     onClose() { this.contentEl.empty(); }
 }
