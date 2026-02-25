@@ -1,16 +1,25 @@
 {
   "name": "obsidian-crypto-pro",
-  "version": "1.1.0",
-  "description": "",
-  "main": "index.js",
+  "version": "1.1.1",
+  "description": "Plugin avanzado de cifrado AES-GCM para Obsidian",
+  "main": "main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "tsc -w",
+    "build": "tsc",
+    "version": "node -e \"const fs=require('fs'); const m=JSON.parse(fs.readFileSync('manifest.json')); m.version=JSON.parse(fs.readFileSync('package.json')).version; fs.writeFileSync('manifest.json', JSON.stringify(m, null, '\t'));\""
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "crypto",
+    "aes-gcm",
+    "security"
+  ],
+  "author": "marcosgus",
+  "license": "MIT",
   "type": "commonjs",
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "obsidian": "^1.12.2",
     "tslib": "^2.8.1",
     "typescript": "^5.9.3"
