@@ -4,7 +4,7 @@ node_modules/
 # Archivos compilados (JavaScript generado por TS)
 # Estos se generan al ejecutar el build, no deben estar en el repo
 main.js
-styles.css
+
 
 # Archivos de sistema y herramientas de construcción
 build.bat
