@@ -103,39 +103,90 @@ class PasswordModal extends obsidian_1.Modal {
         contentEl.createEl("h2", { text: `${this.action} contenido` });
         let pass = "";
         let confirmPass = "";
+        // Elementos para el medidor de fuerza
+        const strengthContainer = contentEl.createEl("div", { cls: "strength-container" });
+        const strengthBar = strengthContainer.createEl("div", { cls: "strength-bar" });
+        const strengthText = strengthContainer.createEl("div", { cls: "strength-text" });
+        // Estilos básicos para el medidor
+        strengthContainer.style.marginBottom = "15px";
+        strengthBar.style.height = "5px";
+        strengthBar.style.width = "0%";
+        strengthBar.style.transition = "width 0.3s, background-color 0.3s";
+        strengthBar.style.borderRadius = "2px";
+        strengthText.style.fontSize = "11px";
+        strengthText.style.marginTop = "5px";
+        const updateStrength = (p) => {
+            let strength = 0;
+            if (p.length > 6)
+                strength += 20;
+            if (p.length > 10)
+                strength += 20;
+            if (/[A-Z]/.test(p))
+                strength += 20;
+            if (/[0-9]/.test(p))
+                strength += 20;
+            if (/[^A-Za-z0-9]/.test(p))
+                strength += 20;
+            strengthBar.style.width = `${strength}%`;
+            if (strength <= 40) {
+                strengthBar.style.backgroundColor = "#ff4d4d";
+                strengthText.innerText = "Fuerza: Débil 🔴";
+            }
+            else if (strength <= 80) {
+                strengthBar.style.backgroundColor = "#ffd11a";
+                strengthText.innerText = "Fuerza: Media 🟡";
+            }
+            else {
+                strengthBar.style.backgroundColor = "#00cc66";
+                strengthText.innerText = "Fuerza: Alta 🟢 (Recomendada)";
+            }
+        };
         const handleAction = () => {
             if (this.action === "Cifrar" && pass !== confirmPass) {
                 new obsidian_1.Notice("❌ Las contraseñas no coinciden.");
                 return;
             }
             if (pass.length === 0) {
-                new obsidian_1.Notice("⚠️ Vacía.");
+                new obsidian_1.Notice("⚠️ La contraseña no puede estar vacía.");
                 return;
             }
             this.close();
             this.onSubmit(pass);
         };
-        new obsidian_1.Setting(contentEl).setName("Contraseña").addText(text => {
+        new obsidian_1.Setting(contentEl)
+            .setName("Contraseña")
+            .addText(text => {
             text.inputEl.type = "password";
-            text.setPlaceholder("Introduce tu clave...").onChange(value => pass = value);
-            text.inputEl.addEventListener('keypress', (e) => { if (e.key === 'Enter' && this.action === "Descifrar")
-                handleAction(); });
-            setTimeout(() => text.inputEl.focus(), 50); // Auto-focus
+            text.setPlaceholder("Introduce tu clave...")
+                .onChange(value => {
+                pass = value;
+                updateStrength(value);
+            });
+            text.inputEl.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && this.action === "Descifrar")
+                    handleAction();
+            });
+            setTimeout(() => text.inputEl.focus(), 50);
         });
         if (this.action === "Cifrar") {
-            new obsidian_1.Setting(contentEl).setName("Confirmar contraseña").addText(text => {
+            new obsidian_1.Setting(contentEl)
+                .setName("Confirmar contraseña")
+                .addText(text => {
                 text.inputEl.type = "password";
-                text.setPlaceholder("Repite tu clave...").onChange(value => confirmPass = value);
-                text.inputEl.addEventListener('keypress', (e) => { if (e.key === 'Enter')
-                    handleAction(); });
+                text.setPlaceholder("Repite tu clave...")
+                    .onChange(value => confirmPass = value);
+                text.inputEl.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter')
+                        handleAction();
+                });
             });
         }
-        new obsidian_1.Setting(contentEl).addButton(btn => btn.setButtonText(this.action).setCta().onClick(() => handleAction()));
-        // --- LEYENDA "BY GUS" ---
-        const footer = contentEl.createEl("div", {
-            text: "by Gus",
-            cls: "crypto-pro-footer"
-        });
+        new obsidian_1.Setting(contentEl)
+            .addButton(btn => btn
+            .setButtonText(this.action)
+            .setCta()
+            .onClick(() => handleAction()));
+        const footer = contentEl.createEl("div", { text: "by Gus", cls: "crypto-pro-footer" });
         footer.style.fontSize = "10px";
         footer.style.textAlign = "right";
         footer.style.marginTop = "20px";
